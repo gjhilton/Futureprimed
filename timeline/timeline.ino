@@ -1,7 +1,7 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <ArdOSC.h>
-// #include <SoftEasyTransfer.h>
+#include <SoftEasyTransfer.h>
 #include <SoftwareSerial.h>
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,9 +12,9 @@
 
 void initCues(){
   setCue(0,  20,   5);
-  setCue(1,  5,   30);
-  setCue(2,  30,  30);
-  setCue(3,  5,   0);
+  setCue(1,  10,   30);
+  setCue(2,  60,  30);
+  setCue(3,  10,   0);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,8 +35,8 @@ int cueSeconds[N_CUES];
 int cueValues[N_CUES];
 boolean running;
 int currentCue, currentSpeed;
-unsigned long nextCueTime;
-// SoftEasyTransfer ET; 
+long nextCueTime;
+SoftEasyTransfer ET; 
 OSCServer listener;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,8 +55,7 @@ void setup() {
 void loop() {
   webserver();
   if (running){
-    unsigned long timeNow = millis();
-    if (timeNow >= nextCueTime) {
+    if (millis() >= nextCueTime) {
       goToCue(currentCue +1); 
     }
   }
@@ -78,7 +77,13 @@ void goToCue(int cue){
   } 
   else {
     unsigned long now = millis();
-    nextCueTime = now + (cueSeconds[currentCue] * 1000);
+    nextCueTime = now + (cueSeconds[currentCue] * 1000.0); // it's important this is a float, else you end up with integer maths - which overfloweth...
+    Serial.print(now);
+    Serial.print("+");
+    Serial.print(cueSeconds[currentCue] * 1000.0);
+    Serial.print("=");
+    Serial.println(nextCueTime);
+    
     Serial.print("Beginning cue:");
     Serial.print(currentCue);
     Serial.print(" at ");
@@ -168,23 +173,6 @@ void writeStatus(EthernetClient client){
   else {
     client.println("<h3>Status: <span style='color:#0c0'>running</span></h3>");
     client.print("<p><a href=\"/stop\">stop</a></p>");
-    /*
-    client.println("<h4>Motor:");
-     client.println(currentSpeed);
-     client.println("</h4>");
-     
-     client.println("<h4>Cue:");
-     client.println(currentCue);
-     client.println("</h4>");
-     
-     client.println("<h4>Time:");
-     client.println(millis());
-     client.println("</h4>");
-     
-     client.println("<h4>Next cue at:");
-     client.println(nextCueTime);
-     client.println("</h4>");
-     */
   }
 
   client.println("<table cellspacing=0 cellpadding=0 style='width:100%; border:1px solid grey;'>");
@@ -195,7 +183,12 @@ void writeStatus(EthernetClient client){
       client.print(" style='background:#aaa;' ");
     }
     client.print("><td>");
-    client.print(cueSeconds[i]);
+    if (running && i==currentCue){
+      client.print((nextCueTime - millis())/1000);
+      client.print("s remaining");
+    } else {
+      client.print(cueSeconds[i]);
+    }
     client.print("</td><td>");
     client.print(cueValues[i]);
     client.println("</td><tr>"); 
