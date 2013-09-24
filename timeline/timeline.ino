@@ -49,7 +49,8 @@ void setup() {
   goWait();
   Ethernet.begin(mac, ip);
   server.begin();
-  //Serial.begin(9600);
+  
+  Serial.begin(9600);
   //Serial.print("server is at ");
   //Serial.println(Ethernet.localIP());
 }
@@ -66,10 +67,12 @@ void loop() {
 
 void goRun(){
   running = true;
+  Serial.print("run");
 }
 
 void goWait(){
   running = false;
+  Serial.print("wait");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,47 +90,64 @@ void setCue(int index, int seconds, int value){
 
 void webserver(){
   EthernetClient client = server.available();
-  if (client) {
-    Serial.println("new client");
-    boolean currentLineIsBlank = true;
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        Serial.write(c);
-        if (c == '\n' && currentLineIsBlank) {
-          displayStatus(client);
-          break;
+  if (client) {                             // if you get a client,
+    Serial.println("new client");           // print a message out the serial port
+    String currentLine = "";                // make a String to hold incoming data from the client
+    while (client.connected()) {            // loop while the client's connected
+      if (client.available()) {             // if there's bytes to read from the client,
+        char c = client.read();             // read a byte, then
+        // Serial.write(c);                    // print it out the serial monitor
+        if (c == '\n') {                    // if the byte is a newline character
+
+          // if the current line is blank, you got two newline characters in a row.
+          // that's the end of the client HTTP request, so send a response:
+          if (currentLine.length() == 0) {  
+            writeStatus(client);
+            // break out of the while loop:
+            break;         
+          } 
+          else {      // if you got a newline, then clear currentLine:
+            currentLine = "";
+          }
+        }     
+        else if (c != '\r') {    // if you got anything else but a carriage return character,
+          currentLine += c;      // add it to the end of the currentLine
         }
-        if (c == '\n') {
-          currentLineIsBlank = true;
-        } 
-        else if (c != '\r') {
-          currentLineIsBlank = false;
+
+        // Check to see if the client request was "GET /go":
+        if (currentLine.endsWith("GET /go")) {
+          goRun();               // GET /go runs the timeline
+        }
+        if (currentLine.endsWith("GET /stop")) {
+          goWait();               // GET /go stops the timeline
         }
       }
     }
-    // delay(1);
+    // close the connection:
     client.stop();
+
     Serial.println("client disonnected");
   }
 }
 
-void displayStatus(EthernetClient client){
+void writeStatus(EthernetClient client){
   client.println("HTTP/1.1 200 OK");
   client.println("Content-Type: text/html");
   client.println("Connection: close");
   client.println();
   client.println("<!DOCTYPE HTML>");
   client.println("<html>");
-  client.println("<meta http-equiv=\"refresh\" content=\"2\">");
+  client.println("<meta http-equiv=\"refresh\" content=\"2; url='/'\">");
 
   client.println("<body>");
   
   
   if (!running){
-    client.println("<h3>Waiting</h3>");
+    client.println("<h3>Waiting.</h3>");
+    client.print("<a href=\"/go\">go</a><br>");
   } else {
     client.println("<h3 style='color:#f00'>Running</h3>");
+    client.print("<a href=\"/stop\">stop</a><br>");
   }
  
   client.println("<table>");
@@ -139,7 +159,8 @@ void displayStatus(EthernetClient client){
     client.println("</td><tr>"); 
   }
   client.println("</table>");
+       
   client.println("</body></html>");
-
+ client.println();
 }
 
