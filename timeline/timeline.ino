@@ -34,8 +34,8 @@ int cueSeconds[N_CUES];
 int cueValues[N_CUES];
 
 boolean running;
-int currentCue;
-unsigned long currentTime;
+int currentCue, currentSpeed;
+unsigned long nextCueTime;
 SoftwareSerial mySerial(16,17);
 // SoftEasyTransfer ET; 
 OSCServer listener;
@@ -57,8 +57,19 @@ void setup() {
 
 
 void loop() {
-  currentTime = millis();
   webserver();
+  if (running){
+    unsigned long timeNow = millis();
+    if (timeNow >= nextCueTime) {
+      currentCue++;
+      if (currentCue > N_CUES){
+        // timeline has finished
+        goWait();
+      } else {
+        nextCueTime = timeNow + (cueSeconds[currentCue] * 1000);
+      }
+    }
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,11 +78,14 @@ void loop() {
 
 void goRun(){
   running = true;
+  currentCue = 0;
+  nextCueTime = millis() + (cueSeconds[0] * 1000);
   Serial.print("run");
 }
 
 void goWait(){
   running = false;
+  currentSpeed = 0;
   Serial.print("wait");
 }
 
@@ -137,22 +151,43 @@ void writeStatus(EthernetClient client){
   client.println();
   client.println("<!DOCTYPE HTML>");
   client.println("<html>");
-  client.println("<meta http-equiv=\"refresh\" content=\"2; url='/'\">");
-
+  client.println("<head><meta http-equiv=\"refresh\" content=\"2; url='/'\"><style>body{font-family:helvetica;}td,th{padding:10px;text-align:center;}</style></head>");
   client.println("<body>");
   
-  
   if (!running){
-    client.println("<h3>Waiting.</h3>");
-    client.print("<a href=\"/go\">go</a><br>");
+    client.println("<h3>Status: ready</h3>");
+    client.print("<p><a href=\"/go\">go</a></p>");
   } else {
-    client.println("<h3 style='color:#f00'>Running</h3>");
-    client.print("<a href=\"/stop\">stop</a><br>");
+    client.println("<h3>Status: <span style='color:#0c0'>running</span></h3>");
+    client.print("<p><a href=\"/stop\">stop</a></p>");
+    
+    client.println("<h4>Motor:");
+    client.println(currentSpeed);
+    client.println("</h4>");
+    
+    client.println("<h4>Cue:");
+    client.println(currentCue);
+    client.println("</h4>");
+    
+    client.println("<h4>Time:");
+    client.println(millis());
+    client.println("</h4>");
+    
+    client.println("<h4>Next cue at:");
+    client.println(nextCueTime);
+    client.println("</h4>");
   }
  
-  client.println("<table>");
+  
+ 
+  client.println("<table cellspacing=0 cellpadding=0 style='width:100%; border:1px solid grey;'>");
+  client.print("<tr style='background:#eee;'><th>duration</th><th>end speed</th></tr>");
   for (int i= 0; i< N_CUES; i++) {
-    client.print("<tr><td>");
+    client.print("<tr");
+    if (running && i==currentCue){
+      client.print(" style='background:#aaa;' ");
+    }
+    client.print("><td>");
     client.print(cueSeconds[i]);
     client.print("</td><td>");
     client.print(cueValues[i]);
