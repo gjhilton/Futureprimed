@@ -1,18 +1,28 @@
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// 
+// KAZIMIER: FUTUREPRIMED MOTOR CONTROLLER
+//
+// Motor system is in two halves, runing on two Arduinos.
+// This half runs on the board with the Ethernet shield, and provides a web interface to a timeline
+// of cues, sending pairs of (duration,speed) to the motor board via SoftEasyTransfer.
+// 
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include <SPI.h>
 #include <Ethernet.h>
-#include <ArdOSC.h>
 #include <SoftEasyTransfer.h>
 #include <SoftwareSerial.h>
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-// HARDCODED CUES
+// HARDCODED CUE LIST
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define N_CUES 4
 
 void initCues(){
+  // setCue(cue number,  duration in seconds,   final motor speed);
   setCue(0,  20,   5);
-  setCue(1,  10,   30);
+  setCue(1,  10,  30);
   setCue(2,  60,  30);
   setCue(3,  10,   0);
 }
@@ -21,11 +31,22 @@ void initCues(){
 // NETWORK CONFIGURATION
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-byte mac[] = {
-  0x90, 0xA2, 0xDA, 0x0E, 0x9B, 0x7F};
+byte mac[] = {0x90, 0xA2, 0xDA, 0x0E, 0x9B, 0x7F};
 IPAddress ip(192, 168, 1, 12);
 EthernetServer server(80);
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// SOFT SERIAL TRANSFER
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 SoftwareSerial mySerial(16,17);
+SoftEasyTransfer ET;
+
+struct SEND_DATA_STRUCTURE{
+  int theSpeed;
+  int theDuration;
+};
+SEND_DATA_STRUCTURE mydata;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBALS
@@ -36,8 +57,6 @@ int cueValues[N_CUES];
 boolean running;
 int currentCue, currentSpeed;
 long nextCueTime;
-SoftEasyTransfer ET; 
-OSCServer listener;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // ARDUINO LIFESYCLE
@@ -46,10 +65,12 @@ OSCServer listener;
 void setup() {
   initCues();
   goWait();
-  Ethernet.begin(mac, ip);
-  server.begin();
-
-  Serial.begin(9600);
+  
+  Ethernet.begin(mac, ip);                // start ethernet interface
+  server.begin();                         // start webserver
+  mySerial.begin(9600);                   // start soft serial
+  ET.begin(details(mydata), &mySerial);   // start easy soft transfer
+  Serial.begin(9600);                     // start serial
 }
 
 void loop() {
@@ -65,9 +86,16 @@ void loop() {
 // STATE
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-void setMotorSpeed(int speed){
+void rampMotor(int speed, int duration){
+  /*
   Serial.print("setting speed to ");
   Serial.print(speed);
+  Serial.print(" and duration ");
+  Serial.print(duration);
+  */
+  mydata.theSpeed = speed;
+  mydata.theDuration = duration;
+  ET.sendData();
 }
 
 void goToCue(int cue){
@@ -78,6 +106,8 @@ void goToCue(int cue){
   else {
     unsigned long now = millis();
     nextCueTime = now + (cueSeconds[currentCue] * 1000.0); // it's important this is a float, else you end up with integer maths - which overfloweth...
+    rampMotor(cueValues[currentCue],cueSeconds[currentCue]);
+    /*
     Serial.print(now);
     Serial.print("+");
     Serial.print(cueSeconds[currentCue] * 1000.0);
@@ -92,6 +122,7 @@ void goToCue(int cue){
     Serial.print(cueSeconds[currentCue]);
     Serial.print(" seconds. Next cue at: ");
     Serial.println(nextCueTime);
+    */
   }
 }
 
@@ -120,11 +151,6 @@ void setCue(int index, int seconds, int value){
 // STATUS REPORTING
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-void serialStatus(){
-  Serial.print("Time:");
-  Serial.println(millis());
-}
-
 void webserver(){
   EthernetClient client = server.available();
   if (client) {                             // if you get a client,
@@ -134,7 +160,7 @@ void webserver(){
         char c = client.read();             // read a byte, then
         if (c == '\n') {                    // if the byte is a newline character
           if (currentLine.length() == 0) {  
-            writeStatus(client);
+            servePage(client);
             break;         
           } 
           else {
@@ -156,31 +182,32 @@ void webserver(){
   }
 }
 
-void writeStatus(EthernetClient client){
+void servePage(EthernetClient client){
   client.println("HTTP/1.1 200 OK");
   client.println("Content-Type: text/html");
   client.println("Connection: close");
   client.println();
   client.println("<!DOCTYPE HTML>");
   client.println("<html>");
-  client.println("<head><meta http-equiv=\"refresh\" content=\"2; url='/'\"><style>body{font-family:helvetica;}td,th{padding:10px;text-align:center;}</style></head>");
+  client.println("<head><meta http-equiv=\"refresh\" content=\"2; url='/'\">");
+  client.println("<style>body{background:#333;color:#fff;font-family:arial}a,td,th{padding:10px;text-align:center}a,a:visited {font-weight:bold;display:block;width:inherit;color:#fff;text-decoration:none;}table{width:100%}a,table{border:2px solid #000}.g{background:#0b0}.r{background:#e00}</style></head>");
   client.println("<body>");
 
-  if (!running){
-    client.println("<h3>Status: ready</h3>");
-    client.print("<p><a href=\"/go\">go</a></p>");
+  if (running){
+	client.println("<h3>Status: RUNNING</h3>");
+    client.print("<p><a class=\"r\" href=\"/stop\">stop</a></p>");
   } 
   else {
-    client.println("<h3>Status: <span style='color:#0c0'>running</span></h3>");
-    client.print("<p><a href=\"/stop\">stop</a></p>");
+    client.println("<h3>Status: READY</h3>");
+    client.print("<p><a class=\"g\" href=\"/go\">go</a></p>");
   }
 
-  client.println("<table cellspacing=0 cellpadding=0 style='width:100%; border:1px solid grey;'>");
-  client.print("<tr style='background:#eee;'><th>duration</th><th>end speed</th></tr>");
+  client.println("<table cellspacing=0>");
+  client.print("<tr style='background:#000;'><th>duration</th><th>end speed</th></tr>");
   for (int i= 0; i< N_CUES; i++) {
     client.print("<tr");
     if (running && i==currentCue){
-      client.print(" style='background:#aaa;' ");
+      client.print(" class=\"g\" ");
     }
     client.print("><td>");
     if (running && i==currentCue){
@@ -193,11 +220,10 @@ void writeStatus(EthernetClient client){
     client.print(cueValues[i]);
     client.println("</td><tr>"); 
   }
-  client.println("</table>");
-
-  client.println("</body></html>");
+  client.println("</table></body></html>");
   client.println();
 }
+
 
 
 
