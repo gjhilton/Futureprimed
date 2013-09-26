@@ -20,10 +20,10 @@
 #define N_CUES 4
 
 void initCues(){
-  // setCue(cue number,  duration in seconds,   final motor speed);
-  setCue(0,  20,   5);
-  setCue(1,  10,  30);
-  setCue(2,  60,  30);
+  // setCue(cue number,  duration in seconds,   final motor speed - max 100);
+  setCue(0,  20,  25);
+  setCue(1,  10,  100);
+  setCue(2,  60,  100);
   setCue(3,  10,   0);
 }
 
@@ -63,14 +63,14 @@ long nextCueTime;
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup() {
-  initCues();
-  goWait();
-  
   Ethernet.begin(mac, ip);                // start ethernet interface
   server.begin();                         // start webserver
   mySerial.begin(9600);                   // start soft serial
   ET.begin(details(mydata), &mySerial);   // start easy soft transfer
   Serial.begin(9600);                     // start serial
+
+initCues();
+  goWait();
 }
 
 void loop() {
@@ -134,6 +134,7 @@ void goRun(){
 
 void goWait(){
   running = false;
+ rampMotor(0,1);
   currentSpeed = 0;
   Serial.println("wait");
 }

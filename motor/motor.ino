@@ -51,7 +51,7 @@ float rampDurationSeconds;
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup(){
-  Serial.begin(9600);
+  //Serial.begin(9600);
   mySerial.begin(9600);
   ET.begin(details(mydata), &mySerial); 
   md.init();
@@ -63,8 +63,8 @@ void loop(){
   if (rampRunning){
     unsigned long elapsedMillis = millis() - rampStartMillis;
     float elapsedSeconds = elapsedMillis/1000.0;
-    Serial.print(elapsedSeconds);
-    Serial.print(":");
+    //Serial.print(elapsedSeconds);
+    //Serial.print(":");
     if (elapsedSeconds >= rampDurationSeconds){
       setMotorSpeed(rampStartSpeed + rampSpeedChange);
       rampRunning = 0;
@@ -90,7 +90,7 @@ void cue(int targetSpeed, int duration){
   rampSpeedChange = float(targetSpeed - rampStartSpeed);
   rampStartMillis = millis();
   rampRunning = true;
-  
+  /*
   Serial.print("Will accelerate from ");
   Serial.print(rampStartSpeed);
   Serial.print(" to ");
@@ -99,6 +99,7 @@ void cue(int targetSpeed, int duration){
   Serial.print(rampDurationSeconds);
   Serial.print(" seconds, beginning ");
   Serial.println(rampStartMillis);
+  */
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,15 +107,15 @@ void cue(int targetSpeed, int duration){
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setMotorSpeed(int s){
-  Serial.print("Setting speed to ");
-  Serial.println(s);
+  //Serial.print("Setting speed to ");
+  //Serial.println(s);
   
   // constrain to safe speed range
   if (s >= MAX_SPEED) s = MAX_SPEED;
   if (s <= 0-MAX_SPEED) s = 0-MAX_SPEED;
   if ((s != 0) && brakeIsOn) brakeOff();
   
-  // md.setM1Speed(s);
+  md.setM1Speed(s);
   currentSpeed = s;
   if ((s == 0) && !brakeIsOn) brakeOn();
 }
