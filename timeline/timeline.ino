@@ -22,8 +22,8 @@
 void initCues(){
   // setCue(cue number,  duration in seconds,   final motor speed - max 100);
   setCue(0,  20,  25);
-  setCue(1,  10,  100);
-  setCue(2,  60,  100);
+  setCue(1,  10,  200);
+  setCue(2,  60,  200);
   setCue(3,  10,   0);
 }
 

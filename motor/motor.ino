@@ -30,7 +30,7 @@ RECEIVE_DATA_STRUCTURE mydata;
 
 DualVNH5019MotorShield md;
 const int BRAKEPIN = 3;
-const int MAX_SPEED = 110;
+const int MAX_SPEED = 200;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // STATE
