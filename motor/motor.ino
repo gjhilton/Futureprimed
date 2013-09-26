@@ -10,6 +10,7 @@
 #include <SoftEasyTransfer.h>
 #include <SoftwareSerial.h>
 #include "DualVNH5019MotorShield.h"
+#include "interpolation.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // SOFT SERIAL TRANSFER
@@ -35,13 +36,15 @@ const int MAX_SPEED = 110;
 // STATE
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-const boolean USE_BRAKE = 1; 
 boolean brakeIsOn = true;
 int currentSpeed = 0;
 
-unsigned long cueEndTime;
-boolean cueRunning = false;
-boolean shouldCue = false;
+boolean rampRunning = false;
+float rampStartSpeed;
+float rampSpeedChange;
+
+unsigned long rampStartMillis;
+float rampDurationSeconds;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // ARDUINO LIFECYCLE
@@ -57,12 +60,45 @@ void setup(){
 }
 
 void loop(){
-  cueCheckEnd();
+  if (rampRunning){
+    unsigned long elapsedMillis = millis() - rampStartMillis;
+    float elapsedSeconds = elapsedMillis/1000.0;
+    Serial.print(elapsedSeconds);
+    Serial.print(":");
+    if (elapsedSeconds >= rampDurationSeconds){
+      setMotorSpeed(rampStartSpeed + rampSpeedChange);
+      rampRunning = 0;
+    } else {
+      setMotorSpeed(int(interpolate(elapsedSeconds, rampStartSpeed, rampSpeedChange, rampDurationSeconds, LINEAR)));
+    }
+  }
+  
   if(ET.receiveData()){
-    Serial.println("Got cue");
     cue(mydata.theSpeed, mydata.theDuration);
   }
-  delay(250);
+  
+  delay(50);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// COMMUNICATIONS
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+void cue(int targetSpeed, int duration){
+  rampDurationSeconds = float(duration);
+  rampStartSpeed = float(currentSpeed);
+  rampSpeedChange = float(targetSpeed - rampStartSpeed);
+  rampStartMillis = millis();
+  rampRunning = true;
+  
+  Serial.print("Will accelerate from ");
+  Serial.print(rampStartSpeed);
+  Serial.print(" to ");
+  Serial.print(rampStartSpeed + rampSpeedChange);
+  Serial.print(" over ");
+  Serial.print(rampDurationSeconds);
+  Serial.print(" seconds, beginning ");
+  Serial.println(rampStartMillis);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,55 +108,25 @@ void loop(){
 void setMotorSpeed(int s){
   Serial.print("Setting speed to ");
   Serial.println(s);
+  
   // constrain to safe speed range
   if (s >= MAX_SPEED) s = MAX_SPEED;
   if (s <= 0-MAX_SPEED) s = 0-MAX_SPEED;
   if ((s != 0) && brakeIsOn) brakeOff();
-  // set speed
-  md.setM1Speed(s);
-  // apply brake if required
+  
+  // md.setM1Speed(s);
+  currentSpeed = s;
   if ((s == 0) && !brakeIsOn) brakeOn();
 }
 
-void cue(int s, int d){
-  Serial.print("Got cue: will drive at ");
-  Serial.print(s);
-  Serial.print(" for ");
-  Serial.print(d);
-  Serial.println(" milliseconds");
-  cueRunning = true;
-  cueEndTime = millis() + d;
-
-  setMotorSpeed(s);
-}
-
-void cueEnd(){
-  setMotorSpeed(0);
-  cueRunning = false;
-}
-
-void cueCheckEnd(){
-  if (cueRunning){
-    if (millis() > cueEndTime){
-      cueEnd();
-    }   
-  }
-}
-
 void brakeOff(){
-  if (USE_BRAKE){
-    Serial.println("brake off");
     digitalWrite(3,HIGH);
     brakeIsOn = 0;
-  }
 }
 
 void brakeOn(){
-  if (USE_BRAKE){
-    Serial.println("brake on");
     digitalWrite(3,LOW);
     brakeIsOn = 1;
-  }
 }
 
 
