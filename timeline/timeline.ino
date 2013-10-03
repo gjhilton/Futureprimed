@@ -17,15 +17,15 @@
 // HARDCODED CUE LIST
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define N_CUES 5
+#define IDLE_SPEED 25
+#define N_CUES 4
 
 void initCues(){
   // setCue(cue number,  duration in seconds,   final motor speed - max 100);
-  setCue(0,  20,  25);
-  setCue(1,  120,  25);
-  setCue(2,  5,  150);
-  setCue(3,  120,   150);
-  setCue(4,  30,   25);
+  setCue(0,  1,  IDLE_SPEED);
+  setCue(1,  5,  150);
+  setCue(2,  120,  150);
+  setCue(3,  30,   IDLE_SPEED);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,8 +52,6 @@ SEND_DATA_STRUCTURE mydata;
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBALS
 ////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define IDLE_SPEED 25
 
 int cueSeconds[N_CUES];
 int cueValues[N_CUES];
@@ -187,7 +185,7 @@ void webserver(){
           goRun();               // GET /go runs the timeline
         }
         if (currentLine.endsWith("GET /idle")) {
-          goIdle();               // GET /idle stops the timeline
+          goIdle();               // GET /idle goes to the default idle speed
         }
         if (currentLine.endsWith("GET /stop")) {
           goStop();               // GET /stop stops the timeline
@@ -206,24 +204,26 @@ void servePage(EthernetClient client){
   client.println("<!DOCTYPE HTML>");
   client.println("<html>");
   client.println("<head><meta http-equiv=\"refresh\" content=\"2; url='/'\">");
-  client.println("<style>body{background:#333;color:#fff;font-family:arial}a,td,th{padding:10px;text-align:center}a,a:visited {font-weight:bold;display:block;width:inherit;color:#fff;text-decoration:none;}table{width:100%}a,table{border:2px solid #000}.g{background:#0b0}.r{background:#e00}</style></head>");
+  client.println("<style>body{background:#333;color:#fff;font-family:arial}a,td,th{padding:10px;text-align:center}a,a:visited {font-weight:bold;display:block;width:inherit;color:#fff;text-decoration:none;}table{width:100%}a,table{border:2px solid #000}.g{background:#0b0}.r{background:#e00}.b{background:#0059ce}</style></head>");
   client.println("<body>");
-
-  if (currentRunState == runStateStopped){
-    printStatus(client, "STOPPED");
-    printIdle(client);
-  } 
-  else if (currentRunState == runStateRunning) {
-    printStatus(client, "RUNNING");
-    printIdle(client);
-    printStop(client);
-  } else {
-    // ie currentRunState == runStateIdle
-    printStatus(client, "READY");
+  
+  // buttons
+  printStatus(client);
+  switch (currentRunState){
+   case runStateStopped:
+     printIdle(client);
+     break;
+   case runStateRunning:
+     printIdle(client);
+     printStop(client);
+     break;
+   case runStateIdle: // fall through
+   default:
     printRun(client);
     printStop(client);
   }
-
+  
+  // cue listing
   client.println("<table cellspacing=0>");
   client.print("<tr style='background:#000;'><th>duration</th><th>end speed</th></tr>");
   for (int i= 0; i< N_CUES; i++) {
@@ -246,18 +246,28 @@ void servePage(EthernetClient client){
   client.println();
 }
 
-void printStatus(EthernetClient client, String s){
-  client.println("<h3>Status:");
-  client.println(s);
+void printStatus(EthernetClient client){
+  client.print("<h3>Status:");
+  switch (currentRunState){
+   case runStateStopped:
+     client.print("stopped");
+     break;
+   case runStateRunning:
+     client.print("RUNNING");
+     break;
+   case runStateIdle: // fall through
+   default:
+    client.print("idling");
+  }
   client.println("</h3>");
 }
 
 void printRun(EthernetClient client){
-  client.print("<p><a class=\"g\" href=\"/go\">go</a></p>");
+  client.print("<p><a class=\"g\" href=\"/go\">go to run mode</a></p>");
 }
 
 void printIdle(EthernetClient client){
-  client.print("<p><a href=\"/idle\">ready</a></p>");
+  client.print("<p><a class=\"b\" href=\"/idle\">go to idle mode</a></p>");
 }
 
 void printStop(EthernetClient client){
