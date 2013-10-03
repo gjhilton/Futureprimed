@@ -17,14 +17,15 @@
 // HARDCODED CUE LIST
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define N_CUES 4
+#define N_CUES 5
 
 void initCues(){
   // setCue(cue number,  duration in seconds,   final motor speed - max 100);
   setCue(0,  20,  25);
-  setCue(1,  10,  200);
-  setCue(2,  60,  200);
-  setCue(3,  10,   0);
+  setCue(1,  120,  25);
+  setCue(2,  5,  150);
+  setCue(3,  120,   150);
+  setCue(4,  30,   25);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,11 +53,15 @@ SEND_DATA_STRUCTURE mydata;
 // GLOBALS
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+#define IDLE_SPEED 25
+
 int cueSeconds[N_CUES];
 int cueValues[N_CUES];
-boolean running;
 int currentCue, currentSpeed;
 long nextCueTime;
+
+typedef enum {runStateStopped, runStateIdle, runStateRunning} runState ;
+runState currentRunState = runStateStopped;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // ARDUINO LIFESYCLE
@@ -70,12 +75,12 @@ void setup() {
   Serial.begin(9600);                     // start serial
 
 initCues();
-  goWait();
+  goIdle();
 }
 
 void loop() {
   webserver();
-  if (running){
+  if (currentRunState == runStateRunning){
     if (millis() >= nextCueTime) {
       goToCue(currentCue +1); 
     }
@@ -101,7 +106,7 @@ void rampMotor(int speed, int duration){
 void goToCue(int cue){
   currentCue = cue;
   if (currentCue >= N_CUES){
-    goWait(); // timeline has finished
+    goIdle(); // timeline has finished
   } 
   else {
     unsigned long now = millis();
@@ -128,13 +133,20 @@ void goToCue(int cue){
 
 void goRun(){
   Serial.println("run");
-  running = true;
+  currentRunState = runStateRunning;
   goToCue(0);
 }
 
-void goWait(){
-  running = false;
- rampMotor(0,1);
+void goIdle(){
+  currentRunState = runStateIdle;
+  rampMotor(IDLE_SPEED,1);
+  currentSpeed = IDLE_SPEED;
+  Serial.println("idle");
+}
+
+void goStop(){
+  currentRunState = runStateStopped;
+  rampMotor(0,1);
   currentSpeed = 0;
   Serial.println("wait");
 }
@@ -174,8 +186,11 @@ void webserver(){
         if (currentLine.endsWith("GET /go")) {
           goRun();               // GET /go runs the timeline
         }
+        if (currentLine.endsWith("GET /idle")) {
+          goIdle();               // GET /idle stops the timeline
+        }
         if (currentLine.endsWith("GET /stop")) {
-          goWait();               // GET /stop stops the timeline
+          goStop();               // GET /stop stops the timeline
         }
       }
     }
@@ -194,24 +209,30 @@ void servePage(EthernetClient client){
   client.println("<style>body{background:#333;color:#fff;font-family:arial}a,td,th{padding:10px;text-align:center}a,a:visited {font-weight:bold;display:block;width:inherit;color:#fff;text-decoration:none;}table{width:100%}a,table{border:2px solid #000}.g{background:#0b0}.r{background:#e00}</style></head>");
   client.println("<body>");
 
-  if (running){
-	client.println("<h3>Status: RUNNING</h3>");
-    client.print("<p><a class=\"r\" href=\"/stop\">stop</a></p>");
+  if (currentRunState == runStateStopped){
+    printStatus(client, "STOPPED");
+    printIdle(client);
   } 
-  else {
-    client.println("<h3>Status: READY</h3>");
-    client.print("<p><a class=\"g\" href=\"/go\">go</a></p>");
+  else if (currentRunState == runStateRunning) {
+    printStatus(client, "RUNNING");
+    printIdle(client);
+    printStop(client);
+  } else {
+    // ie currentRunState == runStateIdle
+    printStatus(client, "READY");
+    printRun(client);
+    printStop(client);
   }
 
   client.println("<table cellspacing=0>");
   client.print("<tr style='background:#000;'><th>duration</th><th>end speed</th></tr>");
   for (int i= 0; i< N_CUES; i++) {
     client.print("<tr");
-    if (running && i==currentCue){
+    if (thisRowActive(i)){
       client.print(" class=\"g\" ");
     }
     client.print("><td>");
-    if (running && i==currentCue){
+    if (thisRowActive(i)){
       client.print((nextCueTime - millis())/1000);
       client.print("s remaining");
     } else {
@@ -225,6 +246,26 @@ void servePage(EthernetClient client){
   client.println();
 }
 
+void printStatus(EthernetClient client, String s){
+  client.println("<h3>Status:");
+  client.println(s);
+  client.println("</h3>");
+}
 
+void printRun(EthernetClient client){
+  client.print("<p><a class=\"g\" href=\"/go\">go</a></p>");
+}
+
+void printIdle(EthernetClient client){
+  client.print("<p><a href=\"/idle\">ready</a></p>");
+}
+
+void printStop(EthernetClient client){
+  client.print("<p><a class=\"r\" href=\"/stop\">stop</a></p>");
+}
+
+boolean thisRowActive(int i){
+  return ((currentRunState == runStateRunning) && (i==currentCue));
+}
 
 
