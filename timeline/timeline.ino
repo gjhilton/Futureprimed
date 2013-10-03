@@ -17,13 +17,14 @@
 // HARDCODED CUE LIST
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define IDLE_SPEED -25
-#define N_CUES 4
+#define IDLE_SPEED 25 // the speed at which the motor will turn over in 'idle' mode
+
+#define N_CUES 4 // this should correspond to the nimber of calls to setCue immediately below
 
 void initCues(){
   // setCue(cue number,  duration in seconds,   final motor speed - max 100);
-  setCue(0,  1,  IDLE_SPEED);
-  setCue(1,  5,  150);
+  setCue(0,  1,    IDLE_SPEED);
+  setCue(1,  5,    150);
   setCue(2,  120,  150);
   setCue(3,  30,   IDLE_SPEED);
 }
@@ -247,7 +248,7 @@ void servePage(EthernetClient client){
 }
 
 void printStatus(EthernetClient client){
-  client.print("<h3>Status:");
+  client.print("<h3>Status: ");
   switch (currentRunState){
    case runStateStopped:
      client.print("stopped");
