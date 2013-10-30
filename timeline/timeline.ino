@@ -17,7 +17,7 @@
 // HARDCODED CUE LIST
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define IDLE_SPEED 25 // the speed at which the motor will turn over in 'idle' mode
+#define IDLE_SPEED -25 // the speed at which the motor will turn over in 'idle' mode
 
 #define N_CUES 4 // this should correspond to the nimber of calls to setCue immediately below
 
